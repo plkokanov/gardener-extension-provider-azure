@@ -63,39 +63,12 @@ func (t *terraformer) GetState(ctx context.Context) ([]byte, error) {
 // GetStateOutputVariables returns the given <variable> from the given Terraform <stateData>.
 // In case the variable was not found, an error is returned.
 func (t *terraformer) GetStateOutputVariables(ctx context.Context, variables ...string) (map[string]string, error) {
-	var (
-		output = make(map[string]string)
-
-		wantedVariables = sets.NewString(variables...)
-		foundVariables  = sets.NewString()
-	)
-
 	stateConfigMap, err := t.GetState(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(stateConfigMap) == 0 {
-		return nil, &variablesNotFoundError{wantedVariables.List()}
-	}
-
-	outputVariables, err := getOutputVariables(stateConfigMap)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, variable := range variables {
-		if outputVariable, ok := outputVariables[variable]; ok {
-			output[variable] = fmt.Sprint(outputVariable.Value)
-			foundVariables.Insert(variable)
-		}
-	}
-
-	if wantedVariables.Len() != foundVariables.Len() {
-		return nil, &variablesNotFoundError{wantedVariables.Difference(foundVariables).List()}
-	}
-
-	return output, nil
+	return GetOutputVariablesFromState(stateConfigMap, variables...)
 }
 
 // IsStateEmpty returns true if the Terraform state is empty and the terraformer finalizer
@@ -142,7 +115,38 @@ func IsVariablesNotFoundError(err error) bool {
 	return false
 }
 
-func getOutputVariables(stateConfigMap []byte) (map[string]outputState, error) {
+func GetOutputVariablesFromState(stateConfigMap []byte, variables ...string) (map[string]string, error) {
+	var (
+		output = make(map[string]string)
+
+		wantedVariables = sets.NewString(variables...)
+		foundVariables  = sets.NewString()
+	)
+
+	if len(stateConfigMap) == 0 {
+		return nil, &variablesNotFoundError{wantedVariables.List()}
+	}
+
+	outputVariables, err := getAllOutputVariables(stateConfigMap)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, variable := range variables {
+		if outputVariable, ok := outputVariables[variable]; ok {
+			output[variable] = fmt.Sprint(outputVariable.Value)
+			foundVariables.Insert(variable)
+		}
+	}
+
+	if wantedVariables.Len() != foundVariables.Len() {
+		return nil, &variablesNotFoundError{wantedVariables.Difference(foundVariables).List()}
+	}
+
+	return output, nil
+}
+
+func getAllOutputVariables(stateConfigMap []byte) (map[string]outputState, error) {
 	version, err := sniffJSONStateVersion(stateConfigMap)
 	if err != nil {
 		return nil, err

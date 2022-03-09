@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/gardener/gardener/extensions/pkg/controller"
-	"github.com/gardener/gardener/extensions/pkg/terraformer"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -372,7 +371,7 @@ type terraformSubnet struct {
 }
 
 // ExtractTerraformState extracts the TerraformState from the given Terraformer.
-func ExtractTerraformState(ctx context.Context, tf terraformer.Terraformer, infra *extensionsv1alpha1.Infrastructure, config *api.InfrastructureConfig, cluster *controller.Cluster) (*TerraformState, error) {
+func ExtractTerraformState(ctx context.Context, extractor VariablesExtractor, infra *extensionsv1alpha1.Infrastructure, config *api.InfrastructureConfig, cluster *controller.Cluster) (*TerraformState, error) {
 	outputKeys := []string{
 		TerraformerOutputKeyResourceGroupName,
 		TerraformerOutputKeyRouteTableName,
@@ -398,7 +397,7 @@ func ExtractTerraformState(ctx context.Context, tf terraformer.Terraformer, infr
 		outputKeys = append(outputKeys, TerraformerOutputKeyIdentityID, TerraformerOutputKeyIdentityClientID)
 	}
 
-	vars, err := tf.GetStateOutputVariables(ctx, outputKeys...)
+	vars, err := extractor.GetOutputVariables(ctx, outputKeys...)
 	if err != nil {
 		return nil, err
 	}
@@ -506,8 +505,8 @@ func StatusFromTerraformState(config *api.InfrastructureConfig, tfState *Terrafo
 }
 
 // ComputeStatus computes the status based on the Terraformer and the given InfrastructureConfig.
-func ComputeStatus(ctx context.Context, tf terraformer.Terraformer, infra *extensionsv1alpha1.Infrastructure, config *api.InfrastructureConfig, cluster *controller.Cluster) (*apiv1alpha1.InfrastructureStatus, error) {
-	state, err := ExtractTerraformState(ctx, tf, infra, config, cluster)
+func ComputeStatus(ctx context.Context, extractor VariablesExtractor, infra *extensionsv1alpha1.Infrastructure, config *api.InfrastructureConfig, cluster *controller.Cluster) (*apiv1alpha1.InfrastructureStatus, error) {
+	state, err := ExtractTerraformState(ctx, extractor, infra, config, cluster)
 	if err != nil {
 		return nil, err
 	}

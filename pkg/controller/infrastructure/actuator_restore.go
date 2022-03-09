@@ -17,6 +17,10 @@ package infrastructure
 import (
 	"context"
 
+	"github.com/gardener/gardener-extension-provider-azure/pkg/apis/azure/helper"
+	infrainternal "github.com/gardener/gardener-extension-provider-azure/pkg/internal/infrastructure"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/terraformer"
 	extensionsv1alpha1 "github.com/gardener/gardener/pkg/apis/extensions/v1alpha1"
@@ -28,6 +32,22 @@ func (a *actuator) Restore(ctx context.Context, infra *extensionsv1alpha1.Infras
 	logger := a.logger.WithValues("infrastructure", client.ObjectKeyFromObject(infra), "operation", "restore")
 	terraformState, err := terraformer.UnmarshalRawState(infra.Status.State)
 	if err != nil {
+		return err
+	}
+
+	config, err := helper.InfrastructureConfigFromInfrastructure(infra)
+	if err != nil {
+		return err
+	}
+
+	providerStatus, err := infrainternal.ComputeStatus(ctx, infrainternal.NewFromStateExtractor([]byte(terraformState.Data)), infra, config, cluster)
+	if err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(infra.DeepCopy())
+	infra.Status.ProviderStatus = &runtime.RawExtension{Object: providerStatus}
+	if err := a.Client().Status().Patch(ctx, infra, patch); err != nil {
 		return err
 	}
 	return a.reconcile(ctx, logger, infra, cluster, terraformer.CreateOrUpdateState{State: &terraformState.Data})
