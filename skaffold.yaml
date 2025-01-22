@@ -1,0 +1,107 @@
+---
+apiVersion: skaffold/v4beta3
+kind: Config
+metadata:
+  name: extension
+build:
+  insecureRegistries:
+    - garden.local.gardener.cloud:5001
+  artifacts:
+    - image: local-skaffold/gardener-extension-provider-azure
+      ko:
+        dependencies:
+          paths:
+            - charts
+            - charts/internal
+            - cmd/gardener-extension-provider-azure
+            - cmd/gardener-extension-provider-azure/app
+            - imagevector
+            - imagevector/images.yaml
+            - pkg/apis/azure
+            - pkg/apis/azure/helper
+            - pkg/apis/azure/install
+            - pkg/apis/azure/v1alpha1
+            - pkg/apis/config
+            - pkg/apis/config/install
+            - pkg/apis/config/loader
+            - pkg/apis/config/v1alpha1
+            - pkg/azure
+            - pkg/azure/client
+            - pkg/cmd
+            - pkg/controller/backupbucket
+            - pkg/controller/backupentry
+            - pkg/controller/bastion
+            - pkg/controller/controlplane
+            - pkg/controller/dnsrecord
+            - pkg/controller/healthcheck
+            - pkg/controller/infrastructure
+            - pkg/controller/infrastructure/infraflow
+            - pkg/controller/infrastructure/infraflow/shared
+            - pkg/controller/worker
+            - pkg/features
+            - pkg/internal
+            - pkg/internal/infrastructure
+            - pkg/internal/infrastructure/templates/main.tpl.tf
+            - pkg/internal/infrastructure/templates/terraform.tfvars
+            - pkg/internal/infrastructure/templates/variables.tf
+            - pkg/webhook/acceleratednetwork
+            - pkg/webhook/cloudprovider
+            - pkg/webhook/controlplane
+            - pkg/webhook/controlplaneexposure
+            - pkg/webhook/highavailability/namespace
+            - pkg/webhook/infrastructure
+            - pkg/webhook/network
+            - pkg/webhook/topology
+            - VERSION
+        ldflags:
+          - '{{.LD_FLAGS}}'
+        main: ./cmd/gardener-extension-provider-azure
+      hooks:
+        after:
+          - command:
+            - bash
+            - hack/generate-kustomize-patch-controllerdeployment-provider-azure.sh
+manifests:
+  kustomize:
+    paths:
+    - local-setup
+deploy:
+  kubectl: {}
+---
+apiVersion: skaffold/v4beta3
+kind: Config
+metadata:
+  name: admission
+build:
+  insecureRegistries:
+    - garden.local.gardener.cloud:5001
+  artifacts:
+    - image: local-skaffold/gardener-extension-admission-azure
+      ko:
+        dependencies:
+          paths:
+            - VERSION
+            - cmd/gardener-extension-admission-azure
+            - cmd/gardener-extension-admission-azure/app
+            - pkg/admission/cmd
+            - pkg/admission/mutator
+            - pkg/admission/validator
+            - pkg/apis/azure
+            - pkg/apis/azure/helper
+            - pkg/apis/azure/install
+            - pkg/apis/azure/v1alpha1
+            - pkg/apis/azure/validation
+            - pkg/azure
+        ldflags:
+          - '{{.LD_FLAGS}}'
+        main: ./cmd/gardener-extension-admission-azure
+deploy:
+  helm:
+    releases:
+      - name: gardener-extension-admission-azure
+        namespace: garden
+        wait: true
+        chartPath: charts/gardener-extension-admission-azure
+        setValueTemplates:
+          global.image.repository: '{{.IMAGE_REPO_local_skaffold_gardener_extension_admission_azure}}'
+          global.image.tag: '{{.IMAGE_TAG_local_skaffold_gardener_extension_admission_azure}}@{{.IMAGE_DIGEST_local_skaffold_gardener_extension_admission_azure}}'

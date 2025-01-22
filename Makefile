@@ -136,6 +136,8 @@ check: $(GOIMPORTS) $(GOLANGCI_LINT) $(HELM)
 	@REPO_ROOT=$(REPO_ROOT) bash $(GARDENER_HACK_DIR)/check.sh --golangci-lint-config=./.golangci.yaml ./cmd/... ./pkg/... ./test/...
 	@REPO_ROOT=$(REPO_ROOT) bash $(GARDENER_HACK_DIR)/check-charts.sh ./charts
 
+	@GARDENER_HACK_DIR=$(GARDENER_HACK_DIR) $(HACK_DIR)/check-skaffold-deps.sh
+
 .PHONY: generate
 generate: $(VGOPATH) $(CONTROLLER_GEN) $(GEN_CRD_API_REFERENCE_DOCS) $(HELM) $(MOCKGEN) $(YQ)
 	@REPO_ROOT=$(REPO_ROOT) VGOPATH=$(VGOPATH) GARDENER_HACK_DIR=$(GARDENER_HACK_DIR) bash $(GARDENER_HACK_DIR)/generate-sequential.sh ./charts/... ./cmd/... ./example/... ./pkg/...
@@ -193,3 +195,20 @@ integration-test-bastion:
 		--client-id='$(shell cat $(CLIENT_ID_FILE))' \
 		--client-secret='$(shell cat $(CLIENT_SECRET_FILE))' \
 		--region=$(REGION)
+
+export SKAFFOLD_BUILD_CONCURRENCY = 0
+extension-up extension-dev: export SKAFFOLD_DEFAULT_REPO = garden.local.gardener.cloud:5001
+extension-up extension-dev: export SKAFFOLD_PUSH = true
+# use static label for skaffold to prevent rolling all gardener components on every `skaffold` invocation
+extension-up extension-dev extension-down: export SKAFFOLD_LABEL = skaffold.dev/run-id=extension-local
+
+extension-up: $(SKAFFOLD) $(HELM) $(KUBECTL) $(KIND)
+	@LD_FLAGS=$(LD_FLAGS) $(SKAFFOLD) run
+
+extension-dev: $(SKAFFOLD) $(HELM) $(KUBECTL) $(KIND)
+	$(SKAFFOLD) dev --cleanup=false --trigger=manual
+
+extension-down: $(SKAFFOLD) $(HELM) $(KUBECTL)
+	$(SKAFFOLD) delete
+	@# The validating webhook is not part of the chart but it is created on admission Pod startup. Hence, we have to delete it explicitly.
+
